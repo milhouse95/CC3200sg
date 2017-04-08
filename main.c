@@ -1,5 +1,3 @@
-//LCD, XBEE, UART, GPIO , i2c drivers
-
 //Standard includes
 #include <stdio.h>
 #include <string.h>
@@ -128,22 +126,41 @@ void DELAY(int n){
 
 
 void UART_INIT(void){
-	MAP_PRCMPeripheralClkEnable(PRCM_UARTA0, PRCM_RUN_MODE_CLK);
-	MAP_PinTypeUART(PIN_55,PIN_MODE_3); //Tx
-	MAP_PinTypeUART(PIN_57,PIN_MODE_3); //Rx
+
+	MAP_PRCMPeripheralClkEnable(PRCM_UARTA1, PRCM_RUN_MODE_CLK);
+	MAP_PinTypeUART(PIN_07,PIN_MODE_5); //Tx
+	MAP_PinTypeUART(PIN_08,PIN_MODE_5); //Rx
 	//operating at 9600 Hz Baud Rate
-	MAP_UARTConfigSetExpClk(UARTA0_BASE,MAP_PRCMPeripheralClockGet(PRCM_UARTA0),9600,UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE);
-	MAP_UARTEnable(UARTA0_BASE);
+	MAP_UARTConfigSetExpClk(UARTA1_BASE,MAP_PRCMPeripheralClockGet(PRCM_UARTA1),9600,UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE);
+	MAP_UARTEnable(UARTA1_BASE);
+
 }
+
+
 
 //printing a string to the console
 void UART_PRINT(char* string){
 
 
 	while(*string != '\0'){
-		MAP_UARTCharPut(UARTA0_BASE,*string++);
+		MAP_UARTCharPut(UARTA1_BASE,*string);
+
 			 //updates to next point in memory
+		string++;
 	}
+
+}
+
+
+void UART_CHAR(uint8_t tx){
+	//check if UART transmitter is busy for fast transfer rates
+	while(MAP_UARTBusy(UARTA1_BASE));
+	MAP_UARTCharPut(UARTA1_BASE,tx);
+}
+
+unsigned char UART_READ_Xbee(){
+
+	return MAP_UARTCharGet(UARTA1_BASE);
 
 }
 //i2c protocol
@@ -152,8 +169,6 @@ void I2C_INIT(void){
 	//enable clock for pheriperal
 	 MAP_PRCMPeripheralClkEnable(PRCM_I2CA0, PRCM_RUN_MODE_CLK);
 	 MAP_PRCMPeripheralReset(PRCM_I2CA0);
-
-
 
 
 	//initializes the i2c Master Block, false keeps it default timing
@@ -201,6 +216,34 @@ void GPIO_WRITE_TO_PIN(unsigned port_pins, unsigned mode ){
 
 	//example code for turning off and on port output
 	//MAP_GPIOPinWrite(GPIOA1_BASE, 0x20, 0x20);
+
+}
+
+void DIG_POT(void){
+
+	//enable clock for pheriperal
+	 MAP_PRCMPeripheralClkEnable(PRCM_I2CA0, PRCM_RUN_MODE_CLK);
+	 MAP_PRCMPeripheralReset(PRCM_I2CA0);
+	//initializes the i2c Master Block, false keeps it at 400kbps
+	MAP_I2CMasterInitExpClk(I2CA0_BASE,SYS_CLK,true);
+	//MAP_PinTypeI2C(PIN_05, PIN_MODE_5); // scl
+	//MAP_PinTypeI2C(PIN_06, PIN_MODE_5); // sda
+
+	MAP_PinTypeI2C(PIN_01, PIN_MODE_1); // scl
+	MAP_PinTypeI2C(PIN_02, PIN_MODE_1); //sda
+	MAP_I2CMasterEnable(I2CA0_BASE);
+
+}
+
+void DIG_WRITE(uint8_t value){
+	MAP_I2CMasterControl(I2CA0_BASE, I2C_MASTER_CMD_BURST_SEND_START); //start cond
+	MAP_I2CMasterSlaveAddrSet(I2CA0_BASE,0b0101110,false); //write slave address
+	DELAY(2000);
+	MAP_I2CMasterDataPut(I2CA0_BASE,value);
+	MAP_I2CMasterControl(I2CA0_BASE,I2C_MASTER_CMD_BURST_SEND_CONT);
+	//while(MAP_I2CMasterBusBusy(I2CA0_BASE)==true);
+	DELAY(2000);
+	//MAP_I2CMasterDataPut(I2CA0_BASE,I2C_MASTER_CMD_BURST_SEND_FINISH);
 
 }
 
@@ -351,27 +394,99 @@ void LCD_STRING(char* character){
 		character++; //goes to next character in memory of the array
 	}
 }
-void main()
-{
-
-		BoardInit(); //initializes the CC3200 Interrupt Vector Table and Pheriphal Clocks
-		I2C_INIT(); //initialize the conditions for the i2c protocol
-		LCD_INIT(); //initalize the LCD to write data into it
-		LCD_STRING("Mist Makers 2.0");
-
-		//see if UART works with LCD
-		UART_INIT();
 
 
-
-		UART_PRINT("Hello");
-
-		while(1);
-
-
+void SOUND_CONTROL(uint8_t zero_to_max){
+	//send only data from 0-255
+	DIG_POT(); //initalize the digital pot bus incase of LCD use
+	DELAY(10000);
+	DIG_WRITE(zero_to_max);
 
 
 }
+void main()
+
+
+{
+
+		BoardInit(); //initializes the CC3200 Interrupt Vector Table and Pheriphal Clocks
+		//I2C_INIT(); //initialize the conditions for the i2c protocol
+		//LCD_INIT(); //initalize the LCD to write data into it
+		//LCD_STRING("Mist Makers 2.0");
+
+		//see if UART works with LCD
+		UART_INIT();
+		SOUND_CONTROL(0);
+
+		SOUND_CONTROL(0xff);
+
+
+		SOUND_CONTROL(0x3d);
+
+		//unsigned char xbeeRx=0;
+
+
+		//DIG_POT();
+		//DELAY(10000); //wait for i2c to set up
+		//DIG_WRITE(31);
+		//DELAY(10000);
+		//DELAY(1000);
+
+
+
+		//DIG_POT();
+		//DELAY(10000); //wait for i2c to set up
+		///DIG_WRITE(0xff);
+		//DELAY(10000);
+		//DELAY(1000);
+		//DIG_WRITE(128);
+
+		//DELAY(1000);
+		//DIG_POT();
+		//LCD_INIT();
+
+		//data buffer from MSP430
+		volatile uint8_t dataXbee[100];
+		volatile int currentData=0;
+		uint8_t start = 0x30; //dummy value to start sync
+		int i =0;
+
+		//LCD_STRING("Start Sync");
+
+/*
+
+		char dataBase[] ="";
+		//int i =0;
+		while(true){
+
+			//send a start request to MSP430 to start sync
+			while(true){
+				//send data until we get the end sync character back from the MSP
+				UART_CHAR(0x30);
+
+				if(UART_READ_Xbee() == 0x30){
+					break;
+				}
+			}
+			//start reading the values from the MSP now after sycn
+			while(currentData <100){
+			dataXbee[currentData++]=UART_READ_Xbee();
+
+			}
+
+			int a =10;
+
+
+		}
+
+*/
+
+
+
+
+		}
+
+
 
 
 
